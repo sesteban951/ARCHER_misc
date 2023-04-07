@@ -151,7 +151,6 @@ void Hopper::updateState(vector_t state) {
 
     scalar_t spring_f = (1 - contact) * (-gains.leg_kp * (leg_pos - length_des) - gains.leg_kd * leg_vel); // contact from Hopper Class
     torque << spring_f, tau;
-    Use eigen OSQP to solve the CLF-CBF-Qp problem.  torque += u_des;  // torque = u_PD + u_des
 
 };
 

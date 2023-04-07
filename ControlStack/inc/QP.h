@@ -14,30 +14,37 @@ class QP {
 
     public:
 
-        scalar_t LfV, V, lambda, delta; // Stability criteria
-        row_vector_3t LgV;
+        int nu; // dim of input (3 vector)
+        int nd; // dim of delta (scalar)
 
-        scalar_t Lfh1, h1, alph1; // Safety criteria 1
-        row_vector_3t Lgh1;
+        scalar_t LfV, V, lambda; // Stability criteria
+        vector_t LgV; // 3x1
 
-        scalar_t Lfh2, h2, alph2; // Safety criteria 2
-        row_vector_3t Lgh2;
+        scalar_t alph1; // Safety criteria 1
+        vector_t h1;
+        vector_t Lfh1; // 3x1
+        vector_t Lgh1; // 3x3
 
-        vector_4t u_bar; // minimize [u; delta]
-        vector_3t u;
+        scalar_t alph2; // Safety criteria 2
+        vector_t h2;
+        vector_t Lfh2; // 3x1
+        vector_t Lgh2; // 3x3 
+
+        vector_t u_bar; // minimize [u; delta]
+        vector_t u;
+        scalar_t delta;
 
         // Safety plus stability criteria as polytope
-        Eigen::SparseMatrix<double,ColMajor> A;                 // to write cons as polytope
-        Eigen::SparseMatrix<double,ColMajor> b_lower, b_upper;  // to write cons as polytope
+        Eigen::SparseMatrix<double,ColMajor> A;    // to write cons as polytope
+        vector_t b_lower, b_upper;                // to write cons as polytope
 
-        // for ocst functions
+        // for cost function
         Eigen::SparseMatrix<double,ColMajor> SparseIdentity;
         Eigen::SparseMatrix<double,ColMajor> H;       // Hessian, quadratic term of cost
         vector_t F;                                   // gradient, linear term in cost
 
         // OSQP solver object
-        Osqp:w
-        Eigen::Solver solver;
+        OsqpEigen::Solver solver;
 
         // Parameters for the QP program
         struct QP_Params {
@@ -46,40 +53,70 @@ class QP {
 
             // argmin 0.5 u^T H u + F^T u s.t. stability1, safety1, safety2
             vector_t QP_quad_scaling; // input scaling, diagonal entries of H
-            vector_t QP_lin_scaling;  // delta scaling, diagonal entry of H
+            vector_t QP_lin_scaling;  // delta scaling, diagonal entry of F
 
             scalar_t u_max;  // upper input limit
             scalar_t u_min;  // lower input limit
 
+            scalar_t flywheel_max; // max flywheel speed
+            scalar_t flywheel_min; // min flyhweel speed
+
         } params;
 
         // Initialize the QP object
-        QP (QP_Params &loaded_params) {
+        QP (int nu, int nd, QP_Params &loaded_params) {
             
+            // var dimension
+            this -> nu = nu;
+            this -> nd = nd;
+
             // load in the QP parameters (sent by YAML)
             params = loaded_params;
 
             // QP solver params
-            int num_vars = 4;
-            int num_cons = 3;    
+            int nvars = nu + nd; // u in R^3, delta in R
+            bool warm_start = true;
             bool verbose = false;
             double tol = 1e-9;
 
             // QP messages
             std::cout << "QP Settings:" << std::endl;
-            std::cout << "SQP Iterations: " << params.SQP_iter << std::endl;
+            std::cout << "SQP Iterations: " << params.QP_SQP_iter << std::endl;
 
-            // need all QP parameters
+            // resize all QP variables. Or prespecify them above
+            LgV.resize(1,nu); 
+            
+            h1.resize(3,1);
+            Lfh1.resize(3,1);  // hardcoded for barrier 
+            Lgh1.resize(3,nu);
+            
+            h2.resize(3,1);
+            Lfh2.resize(3,1);
+            Lgh2.resize(3,nu);
+
+            u_bar.resize(num_vars,1);
+            u.resize(nu,1);
+
+            int A_rows = LgV.rows() + Lgh1.rows() + Lgh2.rows();
+            int A_cols = nvars;
+
+            A.resize(A_rows, A_cols);
+            b_lower.resize(A_rows);
+            b_upper.resize(A_rows);
+            SparseIdentity.resize(A_rows,A_cols);
+            H.resize(nvars,nvars);
+            F.resize(nvars,1);
 
             // solver settings
-            solver.settings()->setVerbosity(verbose);
+            solver.settings() -> setWarmStart(warm_start);
+            solver.settings() -> setVerbosity(verbose);
             //solver.settings()->setAbsoluteTolerance(tol); // hardcode the nuber of its
-            solver.data() -> setNumberOfVariables(num_vars);     // [u; delta];
-            solver.data() -> setNumberOfConstraints(num_cons);   // stability1; safety2l; safety2;
+            solver.data() -> setNumberOfVariables(nvars);     // [u; delta];
+            solver.data() -> setNumberOfConstraints(b_lower.rows());   // stability1; safety2l; safety2;
             
             reset();
             buildCost();
-            buildConstraints();
+            buildConstraints(); // no updateConstraints?
 
             solver.data() -> setHessianMatrix(H); 
             solver.data() -> setGradient(F);
@@ -99,8 +136,8 @@ class QP {
         // QP solver
         int solve(Hopper hopper, vector_t &sol) //vector_3t &command, vector_2t &command_interp);
 
-        void buildCost();        // build cost function
-        void buildConstraints(); // build constraint list
-
+        void buildCost();         // build cost function
+        void buildConstraints();  // build constraint list
+        void updateConstraints(); // update constraints
 };
 

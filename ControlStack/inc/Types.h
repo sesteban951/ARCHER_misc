@@ -56,7 +56,6 @@ using vector_t = Eigen::Matrix<scalar_t, Eigen::Dynamic, 1>;
 /** Static-size vector type. */
 using vector_2t = Eigen::Matrix<scalar_t, 2, 1>;
 using vector_3t = Eigen::Matrix<scalar_t, 3, 1>;
-using vector_4t = Eigen::Matrix<scalar_t, 4, 1>;
 /** Dynamic vector's trajectory type. */
 using vector_array_t = std::vector<vector_t>;
 /** Array of dynamic vector's trajectory type. */
@@ -79,6 +78,8 @@ using matrix_6t   = Eigen::Matrix<scalar_t, 6, 6>; // for A, Q, P in R^6x6
 using matrix_6_3t = Eigen::Matrix<scalar_t, 6, 3>; // for B matrix in R^6x3
 
 using matrix_3_6t = Eigen::Matrix<scalar_t, 3, 6>; // for K gains in R^3x6
+
+using vector_4t = Eigen::Matrix<scalar_t, 4, 1>;
 
 // QP solver additional variables
 using matrix_4t = Eigen::Matrix<scalar_t, 4, 4>; // QP cost function

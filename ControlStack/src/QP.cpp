@@ -15,10 +15,19 @@ int QP::solve(Hopper hopper, vector_t &sol) {
   vector_t x_(21);
   x_ << hopper.q, hopper.v;
 
-  // I need to access dynamic info somehow.
-  // Need some lines from f(x) and g(x) to construct my Lie derivatives
+  // !!!!!!!!  I need to access dynamic info somehow.
+  // !!!!!!!!  Need some lines from f(x) and g(x) to construct my Lie derivatives
 
-
+  /*\
+   * Evaluate the gradients of V and h
+   * Eval dynamics through pinocchio through Hoppper class
+   * compute Lie derivatives
+   * eval V and h at the current state
+   * fill matrix A and vector b_upper
+   * solve the QP ("easy" just do .solve or something)
+   * store the solution in some useful data type
+   *
+  */
 
   return  0;
 }
@@ -26,26 +35,26 @@ int QP::solve(Hopper hopper, vector_t &sol) {
 // reset all vars to zero 
 void QP::reset() {
    
-    LfV.setZero()
+    LfV.setZero() // stability
     V.setZero();
     lambda.setZero();
     delta.setZero();
     
-    Lfh1.setZero();
+    Lfh1.setZero(); // safety 1
     h1.setZero();
     alph1.setZero();
     Lgh1.setZero();
     
-    Lfh2.setZero();
+    Lfh2.setZero(); // safety 2
     h2.setZero();
     alph2.setZero();
     Lgh2.setZero();
 
-    A.setZero();
+    A.setZero();   // polytope 
     b_lower.setZero();
     b_upper.setZero();
 
-    H.setZero();
+    H.setZero();  // cost function matrices
     F.setZero();
 
 }
@@ -65,7 +74,7 @@ void QP::buildCost() {
 
     // populate F, vector
     for (int i=0; i < lin_size; i++) {
-      F.(i) = params.QP_input_scaling(i); // input scaling
+      F(i) = params.QP_input_scaling(i); // input scaling
     }
 
     F(lin_size) = params.QP_input_scaling(lin_size);
@@ -75,7 +84,14 @@ void QP::buildCost() {
 // build constraint list
 void QP::buildConstraints() {
 
+    // use A.insert() -- follow Noel code
 
+}
+
+// update the constraint list
+void QP::updateConstraints() {
+
+    // use A.coeffRef()
 
 }
 
