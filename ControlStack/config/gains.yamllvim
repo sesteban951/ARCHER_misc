@@ -72,8 +72,8 @@ LyapMat:
 # quadratic program config
 QP:
   QP_SQP_iter: 1                  # SQP iterations
-  QP_inputScaling: [1,1,1]    # W diagonal matrix scaling entries
-  QP_deltaScaling:  1000      # rho
+  inputScaling: [1,1,1]    # H diagonal matrix scaling entries
+  deltaScaling:  1000    # F ""
   u_max: 50                       # max input
   u_min: 50                       # min input
   flywheel_max_vel: 200           # max flyhweel speed

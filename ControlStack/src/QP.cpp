@@ -7,14 +7,6 @@
 // MAIN QP Program
 int QP::solve(Hopper hopper, vector_t &sol) {
 
-  // decision variables
-  vector_3t = u_star;
-  scalar_t = delta_star;
-
-  // current state
-  vector_t x_(21);
-  x_ << hopper.q, hopper.v;
-
   // !!!!!!!!  I need to access dynamic info somehow.
   // !!!!!!!!  Need some lines from f(x) and g(x) to construct my Lie derivatives
 
@@ -29,6 +21,44 @@ int QP::solve(Hopper hopper, vector_t &sol) {
    *
   */
 
+  // decision variables
+  vector_t dec_var(4);
+  dec_var.setZero();
+  vector_t opt_sol(4);
+  opt_sol.setZero();
+
+  // current state
+  vector_t x(21); // x in Manifold
+  x << hopper.q, hopper.v;
+
+  vector_t s(20); // xi in Lie Algebra
+  s = Log(x);
+
+  vector_t xi(3), omega(3), eta(6); // eta output coordinates,
+  xi << s(3), s(4), s(5);
+  omega << x(14), x(15), x(16);
+  eta << xi(0), xi(1), xi(2), omega(0), omega(1), omega(2); // not good enough, need \ddot qd
+
+  // Gradeints and hessians
+  hess = H;
+  grad = H*dec_var + F;
+
+  // iterate the in SQP fashion;
+  for (int iter=0; iter<params.QP_SQP_iter; iter++) {
+
+    updateConstraints(/* Need 12 args */);
+    //solver.updateHessian(hess); // Dont need this w/ static H
+    solver.updateGradient(grad);
+    solver.updateLinearConstraintsMatrix(A);
+    solver.updateBounds(b_lower, b_upper);
+    
+    // solve the QP problem
+    solver.solve();
+    sol = solver.getSolution();
+
+
+  }
+
   return  0;
 }
 
@@ -38,7 +68,7 @@ void QP::reset() {
     LfV.setZero() // stability
     V.setZero();
     lambda.setZero();
-    delta.setZero();
+    LgV.setZero();
     
     Lfh1.setZero(); // safety 1
     h1.setZero();
@@ -50,49 +80,145 @@ void QP::reset() {
     alph2.setZero();
     Lgh2.setZero();
 
-    A.setZero();   // polytope 
+    A.setZero();   // constraints as polytope 
     b_lower.setZero();
     b_upper.setZero();
+
+    u.setZero();   // decision variables
+    delta.setZero();
+    u_bar.setZero();
 
     H.setZero();  // cost function matrices
     F.setZero();
 
+    hess.setZero(); // hessian and gradient
+    grad.setZero();
 }
 
 // build the cost function, onyl done once!
-void QP::buildCost() {
+void QP::buildCost(vector_3t u_ff) { // need to pass in MPC u_ff
 
-    int quad_size = QP_quad_scaling.rows() - 1; // last index in vector
-    int lin_size = QP_lin_scaling.rows() - 1;   // last index in vector
+    int input_size = QP_inputScaling.rows(); 
+    int delta_size = QP_deltaScaling.rows(); 
 
-    // populate H, daigonal matrix
-    for (int i=0; i <  quad_size; i++) {
-      H.insert(i,i) = params.QP_quad_scaling(i); // input scaling
+    // build W
+    matrix_t W(input_size, input_size);
+    for (int i=0; i<input_size; i++) {
+      W(i,i) = QP_inputScaling(i);
     }
 
-    H.insert(quad_size, quad_size) = params.QP_quad_scaling(quad_size);
+    // build -2*W*u_ff
+    vector_t temp_vec(input_size);
+    temp_vec = -2*W*u_ff;
 
-    // populate F, vector
-    for (int i=0; i < lin_size; i++) {
-      F(i) = params.QP_input_scaling(i); // input scaling
+    // populate H, daigonal matrix; H = [2*W, 0; 0, 2*rho]
+    for (int i=0; i <  input_size-1; i++) {
+      H.insert(i,i) = 2*params.QP_inputScaling(i); // input scaling
     }
 
-    F(lin_size) = params.QP_input_scaling(lin_size);
+    H.insert(input_size-1, input_size-1) = 2*params.QP_deltaScaling;
+
+    // populate F, vector; F = [-2*W*uff; 0]
+    for (int i=0; i < input_size-1; i++) {
+      F(i) = temp_vec(i); // input scaling
+    }
+
+    F(input_size-1) = 0;
 
 }
 
-// build constraint list
-void QP::buildConstraints() {
+// build constraint list --  init
+void QP::buildConstraints() { // use A.insert() -- follow Noel code
+    
+    // A matrix is not Sparse at all but need Sparse type to use w/ OSQP-EIGEN
+    // fill A with random crap for the init
+    int rows = A.rows();
+    int cols = A.cols();
 
-    // use A.insert() -- follow Noel code
+    for (int i=0; i<rows; i++) {
+      for (int j=0; j<cols; j++) {
+         A.insert(i,j) = 420; // arbitrarily fille with zeros?
+      }
+    }
+    
+    // fill b upper bounds with random crap
+    int len_b = b_upper.rows();
+    for (int i=0; i<len_b; i++) {
+      b_upper(i) = 420;
+    }
+
+    // fill b lower bounds with infinity
+    for (int i=0; i<len_b; i++) {
+      b_lower(i) = -OsqpEigen::INFTY // or enter big ass number
+    }
 
 }
 
 // update the constraint list
-void QP::updateConstraints() {
+void QP::updateConstraints(/* NEED 12 ARGS */) {  // use A.coeffRef()
+  
+  // insert whatever here
 
-    // use A.coeffRef()
+  // indexing offset
+  int r_offset = 0;
+  int c_offset = 0;
 
+  // LgV
+  int n_rows = LgV.rows();
+  int n_cols = LgV.cols();
+  for (int i=0; i<n_rows; i++) {
+    for (int j=0; j<n_cols; j++) {
+      A.coeffRef(i+r_offset, j+c_offset) = LgV(i,j);
+    }
+  }
+
+  // -Lgh1
+  r_offset += LgV.rows();
+  n_rows = Lgh1.rows();
+  n_cols = Lgh1.cols();
+  for (int i=0; i<n_rows; i++) {
+    for (int j=0; j<n_cols; j++) {
+      A.coeffRef(i+r_offset, j+c_offset) = -Lgh1(i,j);
+    }
+  }
+
+  // -Lgh2
+  r_offset += Lgh1.rows();
+  n_rows = Lgh2.rows();
+  n_cols = Lgh2.cols();
+  for (int i=0; i<n_rows; i++) {
+    for (int j=0; j<n_cols; j++) {
+      A.coeffRef(i+r_offset, j+c_offset) = -Lgh2(i,j);
+    }
+
+  // scalar 1 for the delta
+  r_offset = 0;
+  c_offset += LgV.cols();
+  A.coeffRef(r_offset,c_offset) = -1;
+
+  // 0's for absence of delta in safety constraints
+  r_offset += 1;
+  n_rows = Lgh1.rows() + Lgh2.rows();
+  for (int i=0; i<n_rows; i++) {
+      A.coeffRef(i+r_offset, c_offset) = 0;
+    }
+
+  // update b_upper
+  r_offset = 0;
+
+  b_upper(r_offset) = -lambda * V - LfV;
+  
+  r_offset += LfV.rows();
+  n_rows = h1.rows();
+  for (i=0; i<n_rows; i++) {
+    b_upper(i+r_offset) = alph1 * h1(i) + Lfh1(i);  
+  }
+
+  r_offset += h1.rows();
+  n_rows = h2.rows();
+  for (i=0; i<n_rows; i++) {
+    b_upper(i+r_offset) = alph2 * h2(i) + Lfh2(i);  
+  }
 }
 
 // Log operator on manifold element

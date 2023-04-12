@@ -1,7 +1,3 @@
-//
-// Created by igor on 7/20/22.
-//
-
 #ifndef HOPPER_HOPPER_H
 #define HOPPER_HOPPER_H
 
@@ -53,17 +49,9 @@ public:
     quat_t quat_actuator;
 
     struct Lyap {
-
-        // can precompute Q,P and pass in w. YAML
-        matrix_3t P_lyap;
-        matrix_3t Q_lyap;
-
-        // linera feedback gains mmatrices on entire ssytem 
-        //matrix_3_21t = K_fb;
-
-        // add output dynamics gains, dont know what this will look like yet
-        //matrix_3_Xt = ??
-
+        // can precompute Q,P and pass in w/ YAML
+        matrix_6t P_lyap;
+        matrix_6t Q_lyap;
     } lyap;
 
     struct Gains {

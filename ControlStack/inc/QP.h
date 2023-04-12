@@ -16,6 +16,7 @@ class QP {
 
         int nu; // dim of input (3 vector)
         int nd; // dim of delta (scalar)
+        int ncbf; //dim of CBF image
 
         scalar_t LfV, V, lambda; // Stability criteria
         vector_t LgV; // 3x1
@@ -35,13 +36,16 @@ class QP {
         scalar_t delta;
 
         // Safety plus stability criteria as polytope
-        Eigen::SparseMatrix<double,ColMajor> A;    // to write cons as polytope
+        Eigen::SparseMatrix<double,RowMajor> A;    // to write cons as polytope
         vector_t b_lower, b_upper;                // to write cons as polytope
 
         // for cost function
-        Eigen::SparseMatrix<double,ColMajor> SparseIdentity;
-        Eigen::SparseMatrix<double,ColMajor> H;       // Hessian, quadratic term of cost
-        vector_t F;                                   // gradient, linear term in cost
+        Eigen::SparseMatrix<double,RowMajor> H;       // quadratic weights
+        vector_t F;                                   // linear weights
+
+        // gradient and Hessian
+        Eigen::SparseMatrix<double,RowMajor> hess;       // Hessian, quadratic term of cost
+        vector_t grad;                                   // gradient, linear term in cost
 
         // OSQP solver object
         OsqpEigen::Solver solver;
@@ -52,23 +56,24 @@ class QP {
             int QP_SQP_iter;    // SQP iterations
 
             // argmin 0.5 u^T H u + F^T u s.t. stability1, safety1, safety2
-            vector_t QP_quad_scaling; // input scaling, diagonal entries of H
-            vector_t QP_lin_scaling;  // delta scaling, diagonal entry of F
+            vector_3t QP_inputScaling; // input scaling, diagonal entries of W
+            scalar_t  QP_deltaScaling;  // delta scaling, rho
 
             scalar_t u_max;  // upper input limit
             scalar_t u_min;  // lower input limit
 
-            scalar_t flywheel_max; // max flywheel speed
-            scalar_t flywheel_min; // min flyhweel speed
+            scalar_t flywheel_max_vel; // max flywheel speed
+            scalar_t flywheel_min_vel; // min flyhweel speed
 
         } params;
 
         // Initialize the QP object
-        QP (int nu, int nd, QP_Params &loaded_params) {
+        QP (int nu, int nd, int ncbf, QP_Params &loaded_params) {
             
             // var dimension
             this -> nu = nu;
             this -> nd = nd;
+            this -> ncbf = ncbf;   
 
             // load in the QP parameters (sent by YAML)
             params = loaded_params;
@@ -86,16 +91,16 @@ class QP {
             // resize all QP variables. Or prespecify them above
             LgV.resize(1,nu); 
             
-            h1.resize(3,1);
-            Lfh1.resize(3,1);  // hardcoded for barrier 
-            Lgh1.resize(3,nu);
+            h1.resize(ncbf,1);
+            Lfh1.resize(ncbf,1);  // hardcoded for barrier 
+            Lgh1.resize(ncbf,nu);
             
-            h2.resize(3,1);
-            Lfh2.resize(3,1);
-            Lgh2.resize(3,nu);
+            h2.resize(ncbf,1);
+            Lfh2.resize(ncbf,1);
+            Lgh2.resize(ncbf,nu);
 
-            u_bar.resize(num_vars,1);
             u.resize(nu,1);
+            u_bar.resize(num_vars,1);
 
             int A_rows = LgV.rows() + Lgh1.rows() + Lgh2.rows();
             int A_cols = nvars;
@@ -106,6 +111,8 @@ class QP {
             SparseIdentity.resize(A_rows,A_cols);
             H.resize(nvars,nvars);
             F.resize(nvars,1);
+            hess.resize(nvars, nvars);
+            grad.resize(nvars,1);
 
             // solver settings
             solver.settings() -> setWarmStart(warm_start);
@@ -116,10 +123,12 @@ class QP {
             
             reset();
             buildCost();
-            buildConstraints(); // no updateConstraints?
+            
+            // need to get MPC u_ff somehow --------------------------------
+            buildConstraints(u_ff); // no updateConstraints?
 
-            solver.data() -> setHessianMatrix(H); 
-            solver.data() -> setGradient(F);
+            solver.data() -> setHessianMatrix(hess); 
+            solver.data() -> setGradient(grad);
             solver.data() -> setLinearConstraintMatrix(A);
             solver.data() -> setLowerBound(b_lower);
             solver.data() -> setUpperBound(b_upper);

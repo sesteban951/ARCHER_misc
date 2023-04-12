@@ -22,6 +22,7 @@
 #include "../inc/Hopper.h"
 #include "../inc/Types.h"
 #include "../inc/MPC.h"
+#include "../QP.h"  //-----------
 
 #include "pinocchio/algorithm/jacobian.hpp"
 //#include "pinocchio/algorithm/kinematics.hpp"
@@ -39,6 +40,7 @@ const static IOFormat CSVFormat(StreamPrecision, DontAlignCols, ", ", "\n");
 
 static vector_3t getInput() {
   vector_3t input;
+    // define size of state
   std::string line;
   getline(std::cin, line);
   std::istringstream iss(line);
@@ -115,7 +117,7 @@ struct Parameters {
     int stop_index; 
 } p;
 
-void setupGains(const std::string filepath, MPC::MPC_Params &mpc_p) {
+void setupGains(const std::string filepath, MPC::MPC_Params &mpc_p, QP::QP_Params &qp_p) {
     // Read gain yaml
     YAML::Node config = YAML::LoadFile(filepath);
     p.dt = config["LowLevel"]["dt"].as<scalar_t>();
@@ -147,6 +149,20 @@ void setupGains(const std::string filepath, MPC::MPC_Params &mpc_p) {
     mpc_p.time_between_contacts = config["MPC"]["time_between_contacts"].as<scalar_t>();
     mpc_p.hop_height = config["MPC"]["hop_height"].as<scalar_t>();
     mpc_p.max_vel = config["MPC"]["max_vel"].as<scalar_t>();
+
+    // QP paramters  ------------------------------
+    qp_p.QP_SQP_iter = config["QP"]["QP_SQP_iter"].as<int>();
+    qp_p.QP_deltaScaling = config["QP"]["QP_deltaScaling"].as<scalar_t>();
+    qp_p.u_max = config["QP"]["u_max"].as<scalar_t>();
+    qp_p.u_min = config["QP"]["u_min"].as<scalar_t>();
+    qp_p.flywheel_max_vel = config["QP"]["flywheel_max_vel"].as<scalar_t>();
+    qp_p.flywheel_min_vel = config["QP"]["flywheel_min_vel"].as<scalar_t>();
+    
+    tmp=config["QP"]["QP_inputScaling"].as<std::vector<scalar_t>>();
+    int QP_nu = 3;
+    for (int i=0; i<QP_nu; i++) {
+      QP_inputScaling(i) = tmp[i];
+    }
 }
 
 // Driver code
@@ -154,7 +170,8 @@ int main() {
 
     setupSocket();    
     MPC::MPC_Params mpc_p;
-    setupGains("../config/gains.yaml", mpc_p);
+    QP::QP_Params qp_p; //------------
+    setupGains("../config/gains.yaml", mpc_p, qp_p); // -----------------
 
     // Read yaml
 
