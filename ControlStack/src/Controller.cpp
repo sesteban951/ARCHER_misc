@@ -150,7 +150,7 @@ void setupGains(const std::string filepath, MPC::MPC_Params &mpc_p, QP::QP_Param
     mpc_p.hop_height = config["MPC"]["hop_height"].as<scalar_t>();
     mpc_p.max_vel = config["MPC"]["max_vel"].as<scalar_t>();
 
-    // QP paramters  ------------------------------
+    // ------------------- QP paramters  -----------------------
     qp_p.QP_SQP_iter = config["QP"]["QP_SQP_iter"].as<int>();
     qp_p.QP_deltaScaling = config["QP"]["QP_deltaScaling"].as<scalar_t>();
     qp_p.u_max = config["QP"]["u_max"].as<scalar_t>();
@@ -158,10 +158,10 @@ void setupGains(const std::string filepath, MPC::MPC_Params &mpc_p, QP::QP_Param
     qp_p.flywheel_max_vel = config["QP"]["flywheel_max_vel"].as<scalar_t>();
     qp_p.flywheel_min_vel = config["QP"]["flywheel_min_vel"].as<scalar_t>();
     
-    tmp=config["QP"]["QP_inputScaling"].as<std::vector<scalar_t>>();
     int QP_nu = 3;
+    tmp=config["QP"]["QP_inputScaling"].as<std::vector<scalar_t>>();
     for (int i=0; i<QP_nu; i++) {
-      QP_inputScaling(i) = tmp[i];
+      qp_p.QP_inputScaling(i) = tmp[i];
     }
 }
 
@@ -327,7 +327,7 @@ int main() {
 	TX_torques[4] = pos_term[0];
 	TX_torques[5] = pos_term[1];
 	TX_torques[6] = pos_term[2];
-	TX_torques[7] = quat_term.w();
+	qp_p.TX_torques[7] = quat_term.w();
 	TX_torques[8] = quat_term.x();
 	TX_torques[9] = quat_term.y();
 	TX_torques[10] = quat_term.z();

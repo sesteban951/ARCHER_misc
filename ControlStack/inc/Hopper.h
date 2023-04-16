@@ -49,10 +49,15 @@ public:
     quat_t quat_actuator;
 
     struct Lyap {
-        // can precompute Q,P and pass in w/ YAML
         matrix_6t P_lyap;
         matrix_6t Q_lyap;
+        scalar_t lambd;
     } lyap;
+
+    struct Barr {
+      scalar_t alph1;
+      scalar_t alph2;
+    } barr;
 
     struct Gains {
         vector_3t orientation_kp;
@@ -70,13 +75,21 @@ public:
 
     void updateState(vector_t state);
 
-    /*! @brief compute the torque (u_ff + u_feedback)
+    /*! @brief compute the torque (u_ff + u_feedback_PD)
      * @param [in] quat_d_ desried quaternion
      * @param [in] omega_d desried angular rate
      * @param [in] length_des desried spring compression length
      * @param [in] u_des feed forward torque
      */
     void computeTorque(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des);
+    
+  /*! @brief compute the torque (u_ff + u_feedback_QP)
+     * @param [in] quat_d_ desried quaternion
+     * @param [in] omega_d desried angular rate
+     * @param [in] length_des desried spring compression length
+     * @param [in] u_des feed forward torque
+     */
+    void computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des);
 
     /*! @brief  evaluate the forward dynamics
     *  @param [in] q  pos to evaluate the dynamics at
@@ -86,7 +99,13 @@ public:
     */
     vector_t f(const vector_t& q, const vector_t& v, const vector_t& a, const domain& d);
 
-    /*! @brief  compute the linearizations of f
+    /*! @brief  evalute the actuation matrix
+    *  @param [in] q  pos to evaluate the dynamics at
+    *  @param [out] x_dot  the dynamics (dq, ddq)
+    */
+    vector_t g(const vector_t& q);
+    
+  /*! @brief  compute the linearizations of f
     *  @param [in]     q, v, a  - state to compute the jacobians at
     *  @param [out]    A, B, C  - df/dx, df/du, and the residual
     */

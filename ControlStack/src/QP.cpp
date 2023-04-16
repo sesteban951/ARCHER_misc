@@ -34,18 +34,69 @@ int QP::solve(Hopper hopper, vector_t &sol) {
   vector_t s(20); // xi in Lie Algebra
   s = Log(x);
 
-  vector_t xi(3), omega(3), eta(6); // eta output coordinates,
+  vector_t xi(3), omega(3), eta(6);
   xi << s(3), s(4), s(5);
   omega << x(14), x(15), x(16);
   eta << xi(0), xi(1), xi(2), omega(0), omega(1), omega(2); // not good enough, need \ddot qd
 
-  // Gradeints and hessians
+  // get f(x) and g(x) matrices
+  vector_t f_x(20);
+  matrix_t g_x(20,4);
+  
+  vector_t a(10);
+  a.setZero();
+  
+  f_x = Hopper::f(hopper.q, hopper.v, a, hopper.dom);
+  g_x = Hopper::g(hopper.q);
+  
+  // to help compute Lie derivatives
+  vector_t f_hat(20), g_hat(20);
+  f_hat << omega, f_x.segment(13,15); 
+  g_hat << matrix_t::Zero(3,3), //////////////////////////// FIX!!!
+  
+  // Lyapunov function
+  matrix_6t P = lyap.P_lyap; // CTLE matrices
+  matrix_6t Q = lyap.Q_lyap;
+  lambda = lyap.lambd;
+  V = eta.transpose() * P * eta; // V(eta)
+
+  LfV = f_hat.transpose() * P * eta + eta.transpose() * P * f_hat; // Lie derivatives
+  LgV = 2*eta.transpose() * P * g_hat;
+
+  // Barrier function
+  vector_t max_fly_vel(3), min_fly_vel(3);
+  max_fly_vel << params.flywheel_max_vel, 
+                 params.flywheel_max_vel,
+                 params.flywheel_max_vel;
+  min_fly_vel << params.flywheel_min_vel, 
+                 params.flywheel_min_vel,
+                 params.flywheel_min_vel;
+
+  h1 << max_fly_vel(1) - x(17),
+        max_fly_vel(2) - x(18),
+        max_fly_vel(3) - x(19);
+
+  h2 <<  x(17) - min_fly_vel(1),
+         x(18) - min_fly_vel(2),
+         x(19) - min_fly_vel(3);
+  
+  alpha1 = barr.alph1;
+  alpha2 = barr.alph2;
+
+  Lfh2 = f_x.segment(17,19);
+  Lgh2 = g_x.segment(17,19); //nope, need to take a block
+
+  Lfh1 = -Lfh2;
+  Lgh1 = -Lgh2;
+
+  // Gradeints and hessians (fixed)
   hess = H;
-  grad = H*dec_var + F;
 
   // iterate the in SQP fashion;
   for (int iter=0; iter<params.QP_SQP_iter; iter++) {
 
+    grad = H*dec_var + F; // needs to be updated
+    
     updateConstraints(/* Need 12 args */);
     //solver.updateHessian(hess); // Dont need this w/ static H
     solver.updateGradient(grad);
@@ -55,7 +106,6 @@ int QP::solve(Hopper hopper, vector_t &sol) {
     // solve the QP problem
     solver.solve();
     sol = solver.getSolution();
-
 
   }
 

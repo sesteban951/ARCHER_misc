@@ -72,8 +72,36 @@ Hopper::Hopper() {
     quat_actuator = quat_t(0.8806, 0.3646, -0.2795, 0.1160);
     multiplier_on_deltaf = config["MPC"]["multiplier_on_deltaf"].as<scalar_t>();
 
+    // size of state vector
     q.resize(model.nq);
     v.resize(model.nv);
+    
+    // get CLF tuning knobs
+    int square_dim = 6;
+    int vec_idx = 0;
+    std::vector<scalar_t> temp;
+    temp = config["CLF_CBF"]["CLF"]["P"].as<std::vector<scalar_t>>();
+    for (int i=0; i<square_dim; i++) {
+      for (int j=0; j<square_dim;) {
+        lyap.P_lyap(i,j) = temp[vec_idx];   // P matrix
+        vec_idx++;
+      }
+    }
+    
+    vec_idx = 0;
+    temp = config["CLF_CBF"]["CLF"]["Q"].as<std::vector<scalar_t>>();
+    for (int i=0; i<square_dim; i++) {
+      for (int j=0; j<square_dim;) {
+        lyap.Q_lyap(i,j) = Q_vals[vec_idx]; // Q matrix
+        vec_idx++;
+      }
+    }
+
+    lyap.lambd = config["CLF_CBF"]["CLF"]["lambd"].as<scalar_t>(); // lambda
+
+    // get CBF tuning knobs
+    barr.alph1 = config["CLF_CBF"]["CBF"]["alph1"].as<scalar_t>(); // linear extended class K inf
+    barr.alph2 = config["CLF_CBF"]["CBF"]["alph2"].as<scalar_t>(); // linear extended class K inf
 }
 
 void Hopper::updateState(vector_t state) {
@@ -111,17 +139,7 @@ void Hopper::updateState(vector_t state) {
     v << vel, omega, leg_vel, wheel_vel;
 };
 
-////////////////////////////////////////////////////////////////////////////////
-
-
-/* Here, is where the input torque is computed, I need to insert my CLF in here
-  Just note that I need to get current state data somehow.
-  Plan:
-  - Precompute Q and P matrices to satisfy CARE and put them in  YAML config file to be read in Hopper class
-  - Call P and Q into compute torque part  
-  - DO NOT feedback linearize as we have parameter uncertainty in the system!!
-  - Use eigen OSQP to solve the CLF-CBF-Qp problem.   
-*/
+//////////////////////////////////////////////////////////////////////////////////////////////
 
  // Noel's PD controller on quaternion error
  void Hopper::computeTorque(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des) {
@@ -155,7 +173,7 @@ void Hopper::updateState(vector_t state) {
 };
 
 // Lyapunov based controller on xi and omega output functions
-void Hopper::computeTorqueLyap(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des) {
+void Hopper::computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des) {
     
     // create quaternion variables
     quat_t    quat_a_ = quat; 
@@ -184,7 +202,7 @@ void Hopper::computeTorqueLyap(quat_t quat_d_, vector_3t omega_d, scalar_t lengt
 };
     
 
-////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////
 
 vector_t Hopper::f(const vector_t& q, const vector_t& v, const vector_t& a, const domain& d) {
     vector_t x_dot(2*model.nv);
@@ -264,6 +282,34 @@ void Hopper::Df(const vector_t q, const vector_t v, const vector_t a, const doma
 	
     C << f - A * s - B * a.tail(4);
 };
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+
+// function to return the actuation matrix
+matrix_t Hopper::g(const vector_t q) {
+    
+  // acutation selection matrix for \ddot q
+  matrix_t B_mat(10,4);
+  B_mat << 0,0,0,0,
+        0,0,0,0,
+        0,0,0,0,
+        0,0,0,0,
+        0,0,0,0,
+        0,0,0,0,
+        1,0,0,0,
+        0,1,0,0,
+        0,0,1,0,
+        0,0,0,1;
+
+  // build g(x)
+  matrix_t g(20,4);
+  g = matrix_t::Zero(10,4), data.Minv*B_mat; // do I need to update data to get latest Minv?
+
+  return g;
+
+};
+
+//////////////////////////////////////////////////////////////////////////////////////////////
 
 void Hopper::css2dss(const matrix_t &Ac, const matrix_t &Bc, const matrix_t &Cc, const float dt,
                                            matrix_t &Ad, matrix_t &Bd, matrix_t &Cd) {

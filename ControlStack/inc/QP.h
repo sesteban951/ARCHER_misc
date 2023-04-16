@@ -21,12 +21,12 @@ class QP {
         scalar_t LfV, V, lambda; // Stability criteria
         vector_t LgV; // 3x1
 
-        scalar_t alph1; // Safety criteria 1
+        scalar_t alpha1; // Safety criteria 1
         vector_t h1;
         vector_t Lfh1; // 3x1
         vector_t Lgh1; // 3x3
 
-        scalar_t alph2; // Safety criteria 2
+        scalar_t alpha2; // Safety criteria 2
         vector_t h2;
         vector_t Lfh2; // 3x1
         vector_t Lgh2; // 3x3 

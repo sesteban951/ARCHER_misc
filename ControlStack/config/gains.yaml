@@ -53,28 +53,38 @@ MPC:
   max_vel: 5
 SpringStiffness: 1000 # Not so unreasonable that this is a parameter, as it is a soft contact simulator
 
-# Lyapunov Q and P, 6x6, fed as vec(Q) and vec(P)
-LyapMat:
-  Q: [1,  0,  0,  0,  0,  0,
-      0,  1,  0,  0,  0,  0,
-      0,  0,  1,  0,  0,  0,
-      0,  0,  0,  1,  0,  0,
-      0,  0,  0,  0,  1,  0,
-      0,  0,  0,  0,  0,  1,] # 
+# CLF and CBF config
+CLF_CBF:
+  # CLF tuning knobs
+  # Lyapunov Q and P, 6x6, fed as vec(Q^T) and vec(P^T)
+  CLF:
+    Q: [1,  0,  0,  0,  0,  0,
+       0,  1,  0,  0,  0,  0,
+       0,  0,  1,  0,  0,  0,
+       0,  0,  0,  1,  0,  0,
+       0,  0,  0,  0,  1,  0,
+       0,  0,  0,  0,  0,  1,] # 
+  
+    P: [1,  0,  0,  0,  0,  0,
+       0,  1,  0,  0,  0,  0,
+       0,  0,  1,  0,  0,  0,
+       0,  0,  0,  1,  0,  0,
+       0,  0,  0,  0,  1,  0,
+       0,  0,  0,  0,  0,  1,] # 
 
-  P: [1,  2,   3,  4,  5,  6,
-      7,  8,   9, 10, 11, 12,
-      13, 14, 15, 16, 17, 18,
-      19, 20, 21, 22, 23, 24,
-      25, 26, 27, 28, 29, 30,
-      31, 32, 33, 34, 35, 36,]
+    lambd: 1 # lyapunov converegnce rate
+
+  # CBF tuning knobs
+  CBF:
+    alph1: 1   # linear extneded class K inf
+    alph2: 1   # linear extneded class K inf
 
 # quadratic program config
 QP:
   QP_SQP_iter: 1                  # SQP iterations
-  QP_inputScaling: [1,1,1]    # W diagonal matrix scaling entries
-  QP_deltaScaling:  1000      # rho
+  QP_inputScaling: [1,1,1]        # W diagonal matrix scaling entries
+  QP_deltaScaling:  1000          # rho
   u_max: 50                       # max input
   u_min: 50                       # min input
-  flywheel_max_vel: 200           # max flyhweel speed
-  flywheel_min_vel: 200           # min flywheel speed
+  flywheel_max_vel:  200           # max flyhweel speed
+  flywheel_min_vel: -200           # min flywheel speed
