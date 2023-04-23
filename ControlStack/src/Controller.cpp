@@ -22,7 +22,7 @@
 #include "../inc/Hopper.h"
 #include "../inc/Types.h"
 #include "../inc/MPC.h"
-#include "../QP.h"  //-----------
+#include "../inc/QP.h"  //-----------
 
 #include "pinocchio/algorithm/jacobian.hpp"
 //#include "pinocchio/algorithm/kinematics.hpp"
@@ -298,6 +298,8 @@ int main() {
 		//u_des << 0,0,0,0;
 
         	hopper.computeTorque(quat_des, omega_des, 0.1, u_des);
+        	hopper.computeTorqueQP(quat_des, omega_des, 0.1, u_des, qp_p); // CALCULATE QP here --------------------
+
 		t_last = state(0);
 	}
 

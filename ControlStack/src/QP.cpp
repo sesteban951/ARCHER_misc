@@ -5,12 +5,8 @@
 #define assertm(exp, msg) assert(((void)msg, exp))
 
 // MAIN QP Program
-int QP::solve(Hopper hopper, vector_t &sol) {
-
-  // !!!!!!!!  I need to access dynamic info somehow.
-  // !!!!!!!!  Need some lines from f(x) and g(x) to construct my Lie derivatives
-
-  /*\
+int QP::solve(Hopper hopper, vector_t &sol, vector_t u_ff) {
+  /*
    * Evaluate the gradients of V and h
    * Eval dynamics through pinocchio through Hoppper class
    * compute Lie derivatives
@@ -18,14 +14,17 @@ int QP::solve(Hopper hopper, vector_t &sol) {
    * fill matrix A and vector b_upper
    * solve the QP ("easy" just do .solve or something)
    * store the solution in some useful data type
-   *
   */
 
   // decision variables
-  vector_t dec_var(4);
-  dec_var.setZero();
-  vector_t opt_sol(4);
-  opt_sol.setZero();
+  vector_3t u_opt;
+  scalar_t  d_opt;
+  u_opt.setZero();
+  d_opt.setZero();
+
+  // solution variable
+  vector_4t sol_opt(0);
+  sol_opt.setZero();
 
   // current state
   vector_t x(21); // x in Manifold
@@ -34,7 +33,7 @@ int QP::solve(Hopper hopper, vector_t &sol) {
   vector_t s(20); // xi in Lie Algebra
   s = Log(x);
 
-  vector_t xi(3), omega(3), eta(6);
+  vector_t xi(3), omega(3), eta(6); // somehow need to feed x_d
   xi << s(3), s(4), s(5);
   omega << x(14), x(15), x(16);
   eta << xi(0), xi(1), xi(2), omega(0), omega(1), omega(2); // not good enough, need \ddot qd
@@ -46,13 +45,16 @@ int QP::solve(Hopper hopper, vector_t &sol) {
   vector_t a(10);
   a.setZero();
   
-  f_x = Hopper::f(hopper.q, hopper.v, a, hopper.dom);
-  g_x = Hopper::g(hopper.q);
+  f_x = Hopper::f(hopper.q, hopper.v, a, hopper.dom); // full f(x) matrix
+  g_x = Hopper::g(hopper.q); // full g(x) matrix (20x4)
   
   // to help compute Lie derivatives
-  vector_t f_hat(20), g_hat(20);
+  vector_t f_hat(6);
+  matrix_t g_hat(6,3);           // i'm ommiting the input to the spring 
+  matrix_t g_x_block(3,3);       // g_x submatrix
   f_hat << omega, f_x.segment(13,15); 
-  g_hat << matrix_t::Zero(3,3), //////////////////////////// FIX!!!
+  g_x_block = g_x.block<3,3>(13,0);          // 3x3 block starting at (13,0) index
+  g_hat << matrix_t::Zero(3,3), g_x_block    // stack zeros matrix with g_x submatrix
   
   // Lyapunov function
   matrix_6t P = lyap.P_lyap; // CTLE matrices
@@ -84,21 +86,24 @@ int QP::solve(Hopper hopper, vector_t &sol) {
   alpha2 = barr.alph2;
 
   Lfh2 = f_x.segment(17,19);
-  Lgh2 = g_x.segment(17,19); //nope, need to take a block
+  Lgh2 = g_x_block; 
 
   Lfh1 = -Lfh2;
   Lgh1 = -Lgh2;
 
-  // Gradeints and hessians (fixed)
+  // Gradeints and hessians (fixed values)
+  // OSQP: Cost = 1/2 x^T H x + F^T x -- https://robotology.github.io/osqp-eigen/md_pages_mpc.html
+  // Hessian = H and Gradient = F; I dont know why F is called the gradeint
   hess = H;
+  grad = F;
 
-  // iterate the in SQP fashion;
+  // iterate in SQP fashion;
   for (int iter=0; iter<params.QP_SQP_iter; iter++) {
 
-    grad = H*dec_var + F; // needs to be updated
-    
-    updateConstraints(/* Need 12 args */);
-    //solver.updateHessian(hess); // Dont need this w/ static H
+    updateConstraints(scalar_t lambda, scalar_t V, scalar_t LfV, matrix_t LgV,  
+                      scalar_t alpha1, vector_t h1, vector_t Lfh1, matrix_t Lgh1,
+                      scalar_t alpha2, vector_t h2, vector_t Lfh2, matrix_t Lgh2);
+    solver.updateHessian(hess); // Dont need this w/ static H
     solver.updateGradient(grad);
     solver.updateLinearConstraintsMatrix(A);
     solver.updateBounds(b_lower, b_upper);
@@ -107,8 +112,12 @@ int QP::solve(Hopper hopper, vector_t &sol) {
     solver.solve();
     sol = solver.getSolution();
 
+    if (iter < params.QP_SQP_iter-1) {
+      u_opt << sol.segment(0,2);
+      d_opt << sol.segment(3);
+      sol_opt << u_opt, d_opt; // insert optimal solution into vector
+    }
   }
-
   return  0;
 }
 
@@ -122,12 +131,12 @@ void QP::reset() {
     
     Lfh1.setZero(); // safety 1
     h1.setZero();
-    alph1.setZero();
+    alpha1.setZero();
     Lgh1.setZero();
     
     Lfh2.setZero(); // safety 2
     h2.setZero();
-    alph2.setZero();
+    alpha2.setZero();
     Lgh2.setZero();
 
     A.setZero();   // constraints as polytope 
@@ -138,7 +147,7 @@ void QP::reset() {
     delta.setZero();
     u_bar.setZero();
 
-    H.setZero();  // cost function matrices
+    H.setZero();  // OSQP cost function matrices
     F.setZero();
 
     hess.setZero(); // hessian and gradient
@@ -205,9 +214,11 @@ void QP::buildConstraints() { // use A.insert() -- follow Noel code
 }
 
 // update the constraint list
-void QP::updateConstraints(/* NEED 12 ARGS */) {  // use A.coeffRef()
-  
-  // insert whatever here
+void QP::updateConstraints(scalar_t lambda, scalar_t V, scalar_t LfV, matrix_t LgV,  
+                           scalar_t alph1, vector_t h1, vector_t Lfh1, matrix_t Lgh1,
+                           scalar_t alph2, vector_t h2, vector_t Lfh2, matrix_t Lgh2) { 
+
+  // use A.coeffRef()
 
   // indexing offset
   int r_offset = 0;
@@ -261,13 +272,13 @@ void QP::updateConstraints(/* NEED 12 ARGS */) {  // use A.coeffRef()
   r_offset += LfV.rows();
   n_rows = h1.rows();
   for (i=0; i<n_rows; i++) {
-    b_upper(i+r_offset) = alph1 * h1(i) + Lfh1(i);  
+    b_upper(i+r_offset) = alpha1 * h1(i) + Lfh1(i);  
   }
 
   r_offset += h1.rows();
   n_rows = h2.rows();
   for (i=0; i<n_rows; i++) {
-    b_upper(i+r_offset) = alph2 * h2(i) + Lfh2(i);  
+    b_upper(i+r_offset) = alpha2 * h2(i) + Lfh2(i);  
   }
 }
 

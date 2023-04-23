@@ -1,5 +1,6 @@
 #include "../inc/Hopper.h"
 #include "../inc/MPC.h"
+#include "../inc/QP.h"
 #include <stdexcept>
 
 #include <manif/manif.h>
@@ -80,9 +81,10 @@ Hopper::Hopper() {
     int square_dim = 6;
     int vec_idx = 0;
     std::vector<scalar_t> temp;
+    
     temp = config["CLF_CBF"]["CLF"]["P"].as<std::vector<scalar_t>>();
     for (int i=0; i<square_dim; i++) {
-      for (int j=0; j<square_dim;) {
+      for (int j=0; j<square_dim; j++) {
         lyap.P_lyap(i,j) = temp[vec_idx];   // P matrix
         vec_idx++;
       }
@@ -91,7 +93,7 @@ Hopper::Hopper() {
     vec_idx = 0;
     temp = config["CLF_CBF"]["CLF"]["Q"].as<std::vector<scalar_t>>();
     for (int i=0; i<square_dim; i++) {
-      for (int j=0; j<square_dim;) {
+      for (int j=0; j<square_dim; j++) {
         lyap.Q_lyap(i,j) = Q_vals[vec_idx]; // Q matrix
         vec_idx++;
       }
@@ -153,7 +155,7 @@ void Hopper::updateState(vector_t state) {
     quat_d << quat_d_.w(), quat_d_.x(), quat_d_.y(), quat_d_.z(); // "quat_d_" passed in
     quat_a << quat_a_.w(), quat_a_.x(), quat_a_.y(), quat_a_.z();
 
-    vector_3t delta_quat;   //quaternion error
+    vector_3t delta_quat;   //quaternion error, Noel does q_a^-1 * q_d
     delta_quat << quat_a[0] * quat_d.segment(1, 3) - quat_d[0] * quat_a.segment(1, 3) -
                   cross(quat_a.segment(1, 3)) * quat_d.segment(1, 3);
  
@@ -169,38 +171,58 @@ void Hopper::updateState(vector_t state) {
 
     scalar_t spring_f = (1 - contact) * (-gains.leg_kp * (leg_pos - length_des) - gains.leg_kd * leg_vel); // contact from Hopper Class
     torque << spring_f, tau;
-
+    torque += u_des;
 };
 
 // Lyapunov based controller on xi and omega output functions
-void Hopper::computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des) {
+void Hopper::computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des, QP::QP_params &qp_params) {
     
     // create quaternion variables
-    quat_t    quat_a_ = quat; 
-    vector_4t quat_d;
-    vector_4t quat_a;
-    vector_3t delta_quat; // imaginary part of quaternion error 
+    quat_t    quat_a_ = quat;   // quat is Hopper class variable
+    vector_4t quat_d;           // quaternion desired
+    vector_4t quat_a;           // quaternion actual
+    vector_4t quat_e;           // quaternion error
 
-    // create omega variables
+    // create omega variable
     vector_3t omega_a;
 
-    // "quat" is actual quaternion from Hopper class
-    quat_t quat_a_ = quat;
-    quat_a << quat_a_.w(), quat_a_.x(), quat_a_.y(), quat_a_.z();
+    quat_d << quat_d_.w(), quat_d_.x(), quat_d_.y(), quat_d_.z(); // as vector
+    quat_a << quat_a_.w(), quat_a_.x(), quat_a_.y(), quat_a_.z(); // as vector
     
-    // "quat_d_" is passed into this function, from MPC?
-    quat_d << quat_d_.w(), quat_d_.x(), quat_d_.y(), quat_d_.z(); 
-
-    // "delta_quat" is the quaternion error between actual and daesired orientations
-    delta_quat << quat_a[0] * quat_d.segment(1, 3) - quat_d[0] * quat_a.segment(1, 3)
-                 - cross(quat_a.segment(1, 3)) * quat_d.segment(1, 3);
+    scalar_t  sd, sa;
+    vector_3t vd, va;
+    sd = quat_d(0);
+    vd = quat_d.segment(1,3);
+    sa = quat_a(0);
+    va = quat_a.segment(1,3);
+    quat_e << sa*sd + va.transpose() * vd,  // q_e = q_a^-1 * q_d
+              sa*vd - sd*va - cross(va)*vd;
     
-    // "omega_a" -- anugla rate of the body??
-    // "quat_actuator" -- dont know what this variable is for
+    // no idea what's going on here, but OK
     omega_a = -quat_actuator.inverse()._transformVector(omega); // omega from Hopper class. 
 
+    // create QP object
+    int nu, nd, ncbf;
+    nu = 3;
+    nd = 1;
+    ncbf = 3;    
+    QP QP_obj = QP(nu, nd, ncbf, qp_params);
+
+    // solve QP problem
+    vector_t u_opt(nu);
+    scalar_t d_opt;
+    vector_t sol(nu+nd);
+    QP_obj.solve(hopper, sol, u_des);
+    u_opt = sol.segment(0,2);
+    d_opt = sol.segement(3);
+
+    tau = u_opt;
+
+    // update torque
+    scalar_t spring_f = (1 - contact) * (-gains.leg_kp * (leg_pos - length_des) - gains.leg_kd * leg_vel); // contact from Hopper Class
+    torque << spring_f, tau;
+    torque += u_des;
 };
-    
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 

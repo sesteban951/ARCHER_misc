@@ -11,35 +11,29 @@ using namespace Eigen;
 
 //  QP solver class for CLF-CBF (ONLY on the flywheels)
 class QP {
-
-    public:
-
+public:
         int nu; // dim of input (3 vector)
         int nd; // dim of delta (scalar)
         int ncbf; //dim of CBF image
 
         scalar_t LfV, V, lambda; // Stability criteria
-        vector_t LgV; // 3x1
+        matrix_t LgV; // 1x3
 
         scalar_t alpha1; // Safety criteria 1
-        vector_t h1;
+        vector_t h1;   // 3x1
         vector_t Lfh1; // 3x1
-        vector_t Lgh1; // 3x3
+        matrix_t Lgh1; // 3x3
 
         scalar_t alpha2; // Safety criteria 2
-        vector_t h2;
+        vector_t h2;   // 3x1
         vector_t Lfh2; // 3x1
-        vector_t Lgh2; // 3x3 
-
-        vector_t u_bar; // minimize [u; delta]
-        vector_t u;
-        scalar_t delta;
+        matrix_t Lgh2; // 3x3 
 
         // Safety plus stability criteria as polytope
         Eigen::SparseMatrix<double,RowMajor> A;    // to write cons as polytope
         vector_t b_lower, b_upper;                // to write cons as polytope
 
-        // for cost function
+        // OSQP cist function matrices
         Eigen::SparseMatrix<double,RowMajor> H;       // quadratic weights
         vector_t F;                                   // linear weights
 
@@ -99,16 +93,12 @@ class QP {
             Lfh2.resize(ncbf,1);
             Lgh2.resize(ncbf,nu);
 
-            u.resize(nu,1);
-            u_bar.resize(num_vars,1);
-
             int A_rows = LgV.rows() + Lgh1.rows() + Lgh2.rows();
             int A_cols = nvars;
 
             A.resize(A_rows, A_cols);
             b_lower.resize(A_rows);
             b_upper.resize(A_rows);
-            SparseIdentity.resize(A_rows,A_cols);
             H.resize(nvars,nvars);
             F.resize(nvars,1);
             hess.resize(nvars, nvars);
@@ -122,14 +112,15 @@ class QP {
             solver.data() -> setNumberOfConstraints(b_lower.rows());   // stability1; safety2l; safety2;
             
             reset();
-            buildCost();
-            
-            // need to get MPC u_ff somehow --------------------------------
-            buildConstraints(u_ff); // no updateConstraints?
+            // At some point, need to pass in u_ff into this -----------------------------------------
+            vector_3t u_ff;
+            u_ff << 0,0,0;
+            buildCost(u_ff);
+            buildConstraints();
 
             solver.data() -> setHessianMatrix(hess); 
             solver.data() -> setGradient(grad);
-            solver.data() -> setLinearConstraintMatrix(A);
+            solver.data() -> setLinearConstraintsMatrix(A);
             solver.data() -> setLowerBound(b_lower);
             solver.data() -> setUpperBound(b_upper);
 
@@ -137,16 +128,15 @@ class QP {
             solver.initSolver();
         };
 
-        static vector_t Log(vector_t x):        // take manifold element to Lie algebra
-        static vector_t Exp(vector_t xi);       // take Lie element to manifold
-        
         void reset();    // reset all internal variables
-
-        // QP solver
-        int solve(Hopper hopper, vector_t &sol) //vector_3t &command, vector_2t &command_interp);
-
-        void buildCost();         // build cost function
+        void buildCost(vector_t u_ff);         // build cost function
         void buildConstraints();  // build constraint list
         void updateConstraints(); // update constraints
+        
+        static vector_t Log(vector_t x); // Log(.) : Manif -> Lie
+        static vector_t Exp(vector_t xi); // Exp(.) : LIe -> Manif
+        
+        // QP solver
+        int solve(Hopper hopper, vector_t &sol, vector_t u_ff); //vector_3t &command, vector_2t &command_interp);
 };
 

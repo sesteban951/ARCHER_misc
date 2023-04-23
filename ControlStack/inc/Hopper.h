@@ -13,6 +13,8 @@
 #include "pinocchio/multibody/data.hpp"
 #include "pinocchio/algorithm/contact-info.hpp"
 
+#include "../inc/QP.h" // added this b/c I need access to QP parameters
+
 using namespace Hopper_t;
 using namespace pinocchio;
 
@@ -89,7 +91,7 @@ public:
      * @param [in] length_des desried spring compression length
      * @param [in] u_des feed forward torque
      */
-    void computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des);
+    void computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des, QP::QP_Params qp_params);
 
     /*! @brief  evaluate the forward dynamics
     *  @param [in] q  pos to evaluate the dynamics at
