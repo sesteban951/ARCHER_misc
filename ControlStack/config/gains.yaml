@@ -1,90 +1,62 @@
-# Gains associated with the low-level controller
 LowLevel:
-  # For the reaction wheeels multiplying orientation error and angular rate
   Orientation:
-    #Kp: [200, 200, 200]
-    Kp: [ 50,50,50 ]
-    Kd: [ .15,.15,.15 ]
-  # For the leg multiplying deflection error and velocity
-  Leg:
-    #Kp: 10
-    Kp: .5
-    #Kd: .01
-    Kd: .005
+    Kp: [50.0, 50.0, 50.0]
+    Kd: [0.15, 0.15, 0.15]
+  Leg: {Kp: 0.5, Kd: 0.005}
   dt: 0.001
-
 Simulator:
-  p0: [0,0,0.5]         # initial position [x,y,z]
-  v0: [0,0,0]           # initial velocity [x_dot, y_dot, z_dot]
-  rpy0: [0,0,0]         # initial orientation [roll, pitch, yaw]
-  w0: [0,0,0]           # initial angular rate [roll_dot, pitch_dot, yaw_dot]
-  pauseBeforeStart: 0   # how long to wait [in seconds] before simulation begins
-  speed: 1              # speed of simulation [multiplier]
-
-  # Perturbation Forces
-  # pert_force_x: [0, 0, 0, 0]    # perturbation force in X direction at below times
-  # pert_force_y: [0, 0, 0, 0]    # perturbation force in Y direction at below times
-  pert_force_x: [30, -30,10,-10]
-  pert_force_y: [0,0, 10,10]
-  pert_start: [3000, 8000, 11000,14000] # start time for force [milliseconds]
-  pert_end: [3150, 8150, 11150, 14150]  # end time for force [milliseconds
-  simEnd: 10000.0               # time to end the simulation [s]
-  
+  p0: [0.0, 0.0, 0.5]
+  v0: [0.0, 0.0, 0.0]
+  rpy0: [0.0, 0.0, 0.0]
+  w0: [0.0, 0.0, 0.0]
+  pauseBeforeStart: 0.0
+  speed: 1.0
+  pert_force_x: [30.0, -30.0, 10.0, -10.0]
+  pert_force_y: [0.0, 0.0, 10.0, 10.0]
+  pert_start: [3000.0, 8000.0, 11000.0, 14000.0]
+  pert_end: [3150.0, 8150.0, 11150.0, 14150.0]
+  simEnd: 10000.0
 MPC:
-  N: 20                                                 # nodes of MPC horizon
-  stateScaling: [20,20,0,8,8,8,0,0,0,0,                 # cost function scaling on state
-                 2.5,2.5,0,.03,.03,.03,0,0,0,0]         # cost function scaling on vel
-  inputScaling: [.01,.01,.01,.01]                       # cost function scaling on input
-  discountFactor: 1                                     # scale each future node by gamma^k
-  terminalScaling: 1                                    # scaling of terminal state
-  dt_flight: 0.01                                       # dt of flight phase [s]
-  dt_ground: 0.001                                      # dt of ground phase [s]
-  dt_replan: 0.01                                       # dt to run MPC at
-  SQP_iter: 2                                           # number of SQP iterations
-  tau_max: 1.5                                          # maximum control input
-  f_max: 0                                              # maximum force applied to foot
-  groundDuration: 0.07                                  # duration of ground phase
-  heightOffset: 0.35                                    # offset from torso frame (center of flywheels) to uncompressed foot
-  time_between_contacts: 0.3                            # approximate time between contact events
-  multiplier_on_deltaf: 0 # not so unreasonable, as constraints are soft in Mujoco
+  N: 20.0
+  stateScaling: [20.0, 20.0, 0.0, 8.0, 8.0, 8.0, 0.0, 0.0, 0.0, 0.0, 2.5, 2.5, 0.0,
+    0.03, 0.03, 0.03, 0.0, 0.0, 0.0, 0.0]
+  inputScaling: [0.01, 0.01, 0.01, 0.01]
+  discountFactor: 1.0
+  terminalScaling: 1.0
+  dt_flight: 0.01
+  dt_ground: 0.001
+  dt_replan: 0.01
+  SQP_iter: 2.0
+  tau_max: 1.5
+  f_max: 0.0
+  groundDuration: 0.07
+  heightOffset: 0.35
+  time_between_contacts: 0.3
+  multiplier_on_deltaf: 0.0
   hop_height: 0.5
-  circle_amp: -1
-  circle_freq: 20
-  max_vel: 5
-SpringStiffness: 1000 # Not so unreasonable that this is a parameter, as it is a soft contact simulator
-
-# CLF and CBF config
+  circle_amp: -1.0
+  circle_freq: 20.0
+  max_vel: 5.0
+SpringStiffness: 1000.0
 CLF_CBF:
-  # CLF tuning knobs
-  # Lyapunov Q and P, 6x6, fed as vec(Q^T) and vec(P^T)
   CLF:
-    Q: [1,  0,  0,  0,  0,  0,
-        0,  1,  0,  0,  0,  0,
-        0,  0,  1,  0,  0,  0,
-        0,  0,  0,  1,  0,  0,
-        0,  0,  0,  0,  1,  0,
-        0,  0,  0,  0,  0,  1] # 
-  
-    P: [1,  0,  0,  0,  0,  0,
-        0,  1,  0,  0,  0,  0,
-        0,  0,  1,  0,  0,  0,
-        0,  0,  0,  1,  0,  0,
-        0,  0,  0,  0,  1,  0,
-        0,  0,  0,  0,  0,  1] # 
-
-    lambd: 1 # lyapunov converegnce rate
-
-  # CBF tuning knobs
+    Q: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0, 1.0]
+    P: [1.5, 0.0, 0.0, 0.5000000000000001, 0.0, 0.0, 0.0, 1.5, 0.0, 0.0, 0.5000000000000001,
+      0.0, 0.0, 0.0, 1.5, 0.0, 0.0, 0.5000000000000001, 0.5000000000000001, 0.0, 0.0,
+      1.0, 0.0, 0.0, 0.0, 0.5000000000000001, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.5000000000000001,
+      0.0, 0.0, 1.0]
+    lamd: 1.0
   CBF:
-    alph1: 1   # linear extneded class K inf
-    alph2: 1   # linear extneded class K inf
-
-# quadratic program config
+    alph1: 1.0
+    alph2: 1.0
+    'null': [0.0, 0.0, 0.0]
 QP:
-  QP_SQP_iter: 1                  # SQP iterations
-  QP_inputScaling: [1,1,1]        # W diagonal matrix scaling entries
-  QP_deltaScaling:  1000          # rho
-  u_max: 50                       # max input
-  u_min: 50                       # min input
-  flywheel_max_vel:  200           # max flyhweel speed
-  flywheel_min_vel: -200           # min flywheel speed
+  QP_SQP_iter: 1.0
+  QP_inputScaling: [1.0, 1.0, 1.0]
+  QP_deltaScaling: 1000.0
+  u_max: 50.0
+  u_min: 50.0
+  flywheel_max_vel: 200.0
+  flywheel_min_vel: -200.0
