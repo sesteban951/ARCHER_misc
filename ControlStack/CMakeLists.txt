@@ -54,8 +54,8 @@ target_link_libraries(QP Eigen3::Eigen) ###
 target_link_libraries(QP osqp::osqp) ###
 target_link_libraries(QP OsqpEigen::OsqpEigen) ###
 target_include_directories(QP PUBLIC ${manif_INCLUDE_DIRS}) ###
-target_link_libraries(QP ${PINOCCHIO_LIBRARIES}) ###
-target_link_directories(QP PUBLIC ${PINOCCHIO_INCLUDE_DIRS}) ###
+#target_link_libraries(QP ${PINOCCHIO_LIBRARIES}) ###
+#target_link_directories(QP PUBLIC ${PINOCCHIO_INCLUDE_DIRS}) ###
 
 # add the executable
 add_executable(hopper_ctrl src/Controller.cpp)

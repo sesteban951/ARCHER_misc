@@ -1,11 +1,12 @@
 #include "../inc/QP.h"
+#include "../inc/Hopper.h"
 #include <cassert>
 
 // Use (void) to silence unused warnings.                                                            
 #define assertm(exp, msg) assert(((void)msg, exp))
 
 // MAIN QP Program
-int QP::solve(Hopper hopper, vector_t &sol, vector_t u_ff) {
+int QP::solve(Hopper hopper, vector_t &sol, vector_4t quat_e, vector_3t omega_d) {
   /*
    * Evaluate the gradients of V and h
    * Eval dynamics through pinocchio through Hoppper class
@@ -18,9 +19,8 @@ int QP::solve(Hopper hopper, vector_t &sol, vector_t u_ff) {
 
   // decision variables
   vector_3t u_opt;
-  scalar_t  d_opt;
+  scalar_t  d_opt = 0;
   u_opt.setZero();
-  d_opt.setZero();
 
   // solution variable
   vector_4t sol_opt(0);
@@ -30,13 +30,25 @@ int QP::solve(Hopper hopper, vector_t &sol, vector_t u_ff) {
   vector_t x(21); // x in Manifold
   x << hopper.q, hopper.v;
 
+  // replace quat_a w/ quat_e to make log easier
+  x(3) = quat_e(3);
+  x(4) = quat_e(4);
+  x(5) = quat_e(5);
+  x(6) = quat_e(6);
+
   vector_t s(20); // xi in Lie Algebra
   s = Log(x);
 
-  vector_t xi(3), omega(3), eta(6); // somehow need to feed x_d
-  xi << s(3), s(4), s(5);
-  omega << x(14), x(15), x(16);
-  eta << xi(0), xi(1), xi(2), omega(0), omega(1), omega(2); // not good enough, need \ddot qd
+  vector_t xi(3);
+  vector_t eta1(3);
+  vector_t eta2(3);
+  vector_t eta(6);
+  xi << s(3),s(4),s(5);
+  eta1 << xi(0), xi(1), xi(2);
+  eta2(0) = x(14) - omega_d(0);
+  eta2(1) = x(15) - omega_d(1);
+  eta2(2) = x(16) - omega_d(2);
+  eta << eta1, eta2; // not good enough, need \ddot qd
 
   // get f(x) and g(x) matrices
   vector_t f_x(20);
@@ -124,28 +136,26 @@ int QP::solve(Hopper hopper, vector_t &sol, vector_t u_ff) {
 // reset all vars to zero 
 void QP::reset() {
    
-    LfV.setZero() // stability
-    V.setZero();
-    lambda.setZero();
+    // scalar_t is actually a scalar double
+
+    LfV = 0; // stability
+    V = 0;
+    lambda = 0;
     LgV.setZero();
     
     Lfh1.setZero(); // safety 1
     h1.setZero();
-    alpha1.setZero();
+    alpha1 = 0;
     Lgh1.setZero();
     
     Lfh2.setZero(); // safety 2
     h2.setZero();
-    alpha2.setZero();
+    alpha2 = 0;
     Lgh2.setZero();
 
     A.setZero();   // constraints as polytope 
     b_lower.setZero();
     b_upper.setZero();
-
-    u.setZero();   // decision variables
-    delta.setZero();
-    u_bar.setZero();
 
     H.setZero();  // OSQP cost function matrices
     F.setZero();
@@ -155,7 +165,7 @@ void QP::reset() {
 }
 
 // build the cost function, onyl done once!
-void QP::buildCost(vector_3t u_ff) { // need to pass in MPC u_ff
+void QP::buildCost(vector_t u_ff) { // need to pass in MPC u_ff
 
     int input_size = QP_inputScaling.rows(); 
     int delta_size = QP_deltaScaling.rows(); 
@@ -309,7 +319,5 @@ vector_t QP::Exp(vector_t xi) {
   g << xi.segment(0,3), quat.coeffs(), xi.segment(6,14); // full state on Manifold
   return g;
 }
-
-
 
 

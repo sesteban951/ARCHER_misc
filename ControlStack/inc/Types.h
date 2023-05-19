@@ -85,6 +85,8 @@ using vector_4t = Eigen::Matrix<scalar_t, 4, 1>;
 using matrix_4t = Eigen::Matrix<scalar_t, 4, 4>; // QP cost function
 using row_vector_3t = Eigen::Matrix<scalar_t, 1, 3>; // row vector 
 
+using matrix_g = Eigen::Matrix<scalar_t, 20,4>; // for the actuation matrix
+
 /////////////////////////////////////////////////////////////////////
 
 /** Dynamic matrix's trajectory type. */

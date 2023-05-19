@@ -3,7 +3,7 @@
 #include <iostream>
 #include "Types.h"
 #include "yaml-cpp/yaml.h"
-#include "Hopper.h"
+//#include "Hopper.h"
 #include <manif/manif.h>
 
 using namespace Hopper_t;
@@ -62,7 +62,7 @@ public:
         } params;
 
         // Initialize the QP object
-        QP (int nu, int nd, int ncbf, QP_Params &loaded_params) {
+        QP (int nu, int nd, int ncbf, QP_Params &loaded_params, vector_t u_ff) {
             
             // var dimension
             this -> nu = nu;
@@ -86,7 +86,7 @@ public:
             LgV.resize(1,nu); 
             
             h1.resize(ncbf,1);
-            Lfh1.resize(ncbf,1);  // hardcoded for barrier 
+            Lfh1.resize(ncbf,1); 
             Lgh1.resize(ncbf,nu);
             
             h2.resize(ncbf,1);
@@ -113,8 +113,8 @@ public:
             
             reset();
             // At some point, need to pass in u_ff into this -----------------------------------------
-            vector_3t u_ff;
-            u_ff << 0,0,0;
+            //vector_3t u_ff;
+            //u_ff << 0,0,0;
             buildCost(u_ff);
             buildConstraints();
 
@@ -137,6 +137,6 @@ public:
         static vector_t Exp(vector_t xi); // Exp(.) : LIe -> Manif
         
         // QP solver
-        int solve(Hopper hopper, vector_t &sol, vector_t u_ff); //vector_3t &command, vector_2t &command_interp);
+        int solve(Hopper hopper, vector_t &sol, vector_4t quat_e, vector_3t omega_d); //vector_3t &command, vector_2t &command_interp);
 };
 

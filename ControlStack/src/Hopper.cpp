@@ -1,6 +1,6 @@
 #include "../inc/Hopper.h"
 #include "../inc/MPC.h"
-#include "../inc/QP.h"
+//#include "../inc/QP.h"
 #include <stdexcept>
 
 #include <manif/manif.h>
@@ -94,7 +94,7 @@ Hopper::Hopper() {
     temp = config["CLF_CBF"]["CLF"]["Q"].as<std::vector<scalar_t>>();
     for (int i=0; i<square_dim; i++) {
       for (int j=0; j<square_dim; j++) {
-        lyap.Q_lyap(i,j) = Q_vals[vec_idx]; // Q matrix
+        lyap.Q_lyap(i,j) = temp[vec_idx]; // Q matrix
         vec_idx++;
       }
     }
@@ -175,7 +175,7 @@ void Hopper::updateState(vector_t state) {
 };
 
 // Lyapunov based controller on xi and omega output functions
-void Hopper::computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des, QP::QP_params &qp_params) {
+void Hopper::computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des, QP::QP_Params qp_params) {
     
     // create quaternion variables
     quat_t    quat_a_ = quat;   // quat is Hopper class variable
@@ -186,6 +186,7 @@ void Hopper::computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_
     // create omega variable
     vector_3t omega_a;
 
+    // quaternion error
     quat_d << quat_d_.w(), quat_d_.x(), quat_d_.y(), quat_d_.z(); // as vector
     quat_a << quat_a_.w(), quat_a_.x(), quat_a_.y(), quat_a_.z(); // as vector
     
@@ -201,21 +202,22 @@ void Hopper::computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_
     // no idea what's going on here, but OK
     omega_a = -quat_actuator.inverse()._transformVector(omega); // omega from Hopper class. 
 
-    // create QP object
+    // create QP object -- WARNING: recreating the QP onbject could be slow
     int nu, nd, ncbf;
     nu = 3;
     nd = 1;
     ncbf = 3;    
-    QP QP_obj = QP(nu, nd, ncbf, qp_params);
+    QP QP_obj = QP(nu, nd, ncbf, qp_params, u_des.segment(1,3));
 
     // solve QP problem
     vector_t u_opt(nu);
     scalar_t d_opt;
     vector_t sol(nu+nd);
-    QP_obj.solve(hopper, sol, u_des);
-    u_opt = sol.segment(0,2);
-    d_opt = sol.segement(3);
+    QP_obj.solve(this, sol, u_des.segment(1,3), quat_e, omega_d);
+    u_opt = sol.segment(0,3);
+    d_opt = sol(3);
 
+    vector_t tau(3);
     tau = u_opt;
 
     // update torque
@@ -309,7 +311,11 @@ void Hopper::Df(const vector_t q, const vector_t v, const vector_t a, const doma
 
 // function to return the actuation matrix
 matrix_t Hopper::g(const vector_t q) {
-    
+  
+  // right now this might be fine -- but make sure you call the f_x function
+
+  // do I need to query something to get an updated data.Minv?
+
   // acutation selection matrix for \ddot q
   matrix_t B_mat(10,4);
   B_mat << 0,0,0,0,
@@ -318,16 +324,16 @@ matrix_t Hopper::g(const vector_t q) {
         0,0,0,0,
         0,0,0,0,
         0,0,0,0,
-        1,0,0,0,
-        0,1,0,0,
-        0,0,1,0,
-        0,0,0,1;
+        1,0,0,0, // spring
+        0,1,0,0, // flywheel
+        0,0,1,0, // flywheel
+I        0,0,0,1; // flywheel ?
 
   // build g(x)
-  matrix_t g(20,4);
-  g = matrix_t::Zero(10,4), data.Minv*B_mat; // do I need to update data to get latest Minv?
+  matrix_t g_act(20,4);
+  g_act = matrix_t::Zero(10,4), data.Minv*B_mat; // do I need to update data to get latest Minv?
 
-  return g;
+  return g_act;
 
 };
 

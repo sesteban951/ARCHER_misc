@@ -34,7 +34,6 @@ using namespace Eigen;
 using namespace Hopper_t;
 using namespace pinocchio;
 
-
 const static IOFormat CleanFmt(4, 0, ", ", "\n", "[", "]");
 const static IOFormat CSVFormat(StreamPrecision, DontAlignCols, ", ", "\n");
 

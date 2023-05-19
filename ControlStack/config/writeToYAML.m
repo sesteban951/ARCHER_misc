@@ -6,7 +6,7 @@ clear all; clc;
 
 % add YAML repo path
 repo_path = "../yaml";
-addpath(genpath('../yaml'))
+addpath(genpath('/yaml'))
 
 % Linear System after Feedback linearization
 eta_dim = 6;
@@ -23,7 +23,7 @@ cont = ctrb(F,G);
 controllable = (eta_dim == rank(cont))
 
 % select controller design
-control_design = 3;   % 1 - LQR gains
+control_design = 1;   % 1 - LQR gains
                       % 2 - pole placements
                       % 3 - custom gains
 

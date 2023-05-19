@@ -13,7 +13,8 @@
 #include "pinocchio/multibody/data.hpp"
 #include "pinocchio/algorithm/contact-info.hpp"
 
-#include "../inc/QP.h" // added this b/c I need access to QP parameters
+//#include "../inc/QP.h" // added this b/c I need access to QP parameters
+#include "QP.h" // <--- fixed my error
 
 using namespace Hopper_t;
 using namespace pinocchio;
@@ -85,12 +86,12 @@ public:
      */
     void computeTorque(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des);
     
-  /*! @brief compute the torque (u_ff + u_feedback_QP)
+  /*! @brief compute the torque #(u_ff + u_feedback_QP)
      * @param [in] quat_d_ desried quaternion
      * @param [in] omega_d desried angular rate
      * @param [in] length_des desried spring compression length
      * @param [in] u_des feed forward torque
-     */
+     */#
     void computeTorqueQP(quat_t quat_d_, vector_3t omega_d, scalar_t length_des, vector_t u_des, QP::QP_Params qp_params);
 
     /*! @brief  evaluate the forward dynamics
@@ -105,7 +106,7 @@ public:
     *  @param [in] q  pos to evaluate the dynamics at
     *  @param [out] x_dot  the dynamics (dq, ddq)
     */
-    vector_t g(const vector_t& q);
+    matrix_t g(const vector_t& q);
     
   /*! @brief  compute the linearizations of f
     *  @param [in]     q, v, a  - state to compute the jacobians at
